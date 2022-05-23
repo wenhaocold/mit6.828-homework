@@ -37,6 +37,12 @@ struct pipecmd {
   struct cmd *right; // right side of pipe
 };
 
+struct semicoloncmd {
+  int type;          // |
+  struct cmd *left;  // left side of pipe
+  struct cmd *right; // right side of pipe
+};
+
 int fork1(void);  // Fork but exits on failure.
 struct cmd *parsecmd(char*);
 
@@ -48,6 +54,7 @@ runcmd(struct cmd *cmd)
   struct execcmd *ecmd;
   struct pipecmd *pcmd;
   struct redircmd *rcmd;
+  struct semicoloncmd *scmd;
 
   if(cmd == 0)
     _exit(0);
@@ -124,6 +131,16 @@ runcmd(struct cmd *cmd)
     wait(0);
     wait(0);
     break;
+
+  case ';':
+    scmd = (struct semicoloncmd*)cmd;
+    if (fork() == 0) {
+      runcmd(scmd->left); 
+    }
+    else {
+      wait(0); 
+      runcmd(scmd->right);
+    }
     break;
   }    
   _exit(0);
@@ -213,10 +230,22 @@ pipecmd(struct cmd *left, struct cmd *right)
   return (struct cmd*)cmd;
 }
 
+struct cmd*
+semicoloncmd(struct cmd *left, struct cmd *right)
+{
+  struct semicoloncmd *cmd;
+
+  cmd = malloc(sizeof(*cmd));
+  memset(cmd, 0, sizeof(*cmd));
+  cmd->type = ';';
+  cmd->left = left;
+  cmd->right = right;
+  return (struct cmd*)cmd;
+}
 // Parsing
 
 char whitespace[] = " \t\r\n\v";
-char symbols[] = "<|>";
+char symbols[] = "<|>;";
 
 int
 gettoken(char **ps, char *es, char **q, char **eq)
@@ -238,6 +267,9 @@ gettoken(char **ps, char *es, char **q, char **eq)
     s++;
     break;
   case '>':
+    s++;
+    break;
+  case ';':
     s++;
     break;
   default:
@@ -268,6 +300,7 @@ peek(char **ps, char *es, char *toks)
 }
 
 struct cmd *parseline(char**, char*);
+struct cmd *parsesemicolon(char**, char*);
 struct cmd *parsepipe(char**, char*);
 struct cmd *parseexec(char**, char*);
 
@@ -304,7 +337,19 @@ struct cmd*
 parseline(char **ps, char *es)
 {
   struct cmd *cmd;
+  cmd = parsesemicolon(ps, es);
+  return cmd;
+}
+
+struct cmd* 
+parsesemicolon(char **ps, char *es) 
+{
+  struct cmd *cmd;
   cmd = parsepipe(ps, es);
+  if (peek(ps, es, ";")) {
+    gettoken(ps, es, 0, 0);
+    cmd = semicoloncmd(cmd, parsesemicolon(ps, es));
+  }
   return cmd;
 }
 
@@ -358,7 +403,7 @@ parseexec(char **ps, char *es)
 
   argc = 0;
   ret = parseredirs(ret, ps, es);
-  while(!peek(ps, es, "|")){
+  while(!peek(ps, es, "|;")){
     if((tok=gettoken(ps, es, &q, &eq)) == 0)
       break;
     if(tok != 'a') {
