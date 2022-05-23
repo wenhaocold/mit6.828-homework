@@ -72,9 +72,16 @@ runcmd(struct cmd *cmd)
   case '>':
   case '<':
     rcmd = (struct redircmd*)cmd;
-    fprintf(stderr, "redir not implemented\n");
+    // fprintf(stderr, "redir not implemented\n");
     // Your code here ...
+    close(rcmd->fd);
+    int fd = open(rcmd->file, rcmd->flags, 0777);
+    if (fd == -1) {
+      perror(0); 
+      _exit(-1);
+    }
     runcmd(rcmd->cmd);
+    close(fd);
     break;
 
   case '|':
