@@ -86,8 +86,44 @@ runcmd(struct cmd *cmd)
 
   case '|':
     pcmd = (struct pipecmd*)cmd;
-    fprintf(stderr, "pipe not implemented\n");
+    // fprintf(stderr, "pipe not implemented\n");
     // Your code here ...
+    int p[2];
+    if (pipe(p) == -1) {
+      perror("pipe");
+      _exit(-1);
+    }
+    pid_t pid_l = fork();
+    if (pid_l == -1) {
+      perror("fork");
+      _exit(-1);
+    }
+    if (pid_l == 0) {
+      close(1);
+      dup(p[1]);
+      close(p[0]);
+      close(p[1]);
+      runcmd(pcmd->left);
+    }
+
+    pid_t pid_r = fork();
+    if (pid_r == -1) {
+      perror("fork");
+      _exit(-1);
+    }
+    if (pid_r == 0) {
+      close(0);
+      dup(p[0]);
+      close(p[0]);
+      close(p[1]);
+      runcmd(pcmd->right);
+    }
+    // don't forget close pipe in parent process, otherwise, the read operation of pipe without conent will be blocked
+    close(p[0]);
+    close(p[1]);
+    wait(0);
+    wait(0);
+    break;
     break;
   }    
   _exit(0);
